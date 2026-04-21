@@ -15,6 +15,9 @@ test_that("saving and loading works for generic algorithms when supported", {
         algos$nndescent <- NndescentParam()
         algos$rpforest <- RpforestParam()
     }
+    if (requireNamespace("rflann", quietly=TRUE)) {
+        algos$flann_kdtree <- FlannKdtreeParam()
+    }
 
     for (algo in names(algos)) {
         idx <- buildIndex(Y, BNPARAM=algos[[algo]])

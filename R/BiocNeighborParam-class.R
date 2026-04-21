@@ -4,13 +4,14 @@
 #' 
 #' @details
 #' The BiocNeighborParam class is a virtual base class on which other parameter objects are built.
-#' There are currently 7 concrete subclasses in \pkg{BiocNeighbors}:
+#' There are currently 8 concrete subclasses in \pkg{BiocNeighbors}:
 #' \describe{
 #' \item{\code{\link{KmknnParam}}:}{Exact nearest-neighbor search with the KMKNN algorithm.}
 #' \item{\code{\link{VptreeParam}}:}{Exact nearest-neighbor search with the tree algorithm.}
 #' \item{\code{\link{ExhaustiveParam}}:}{Exact nearest-neighbor search via brute-force.}
 #' \item{\code{\link{AnnoyParam}}:}{Approximate nearest-neighbor search with the Annoy algorithm.}
 #' \item{\code{\link{HnswParam}}:}{Approximate nearest-neighbor search with the HNSW algorithm.}
+#' \item{\code{\link{FlannKdtreeParam}}:}{Approximate nearest-neighbor search with FLANN randomized kd-trees.}
 #' \item{\code{\link{NndescentParam}}:}{Approximate nearest-neighbor search with nearest-neighbor descent.}
 #' \item{\code{\link{RpforestParam}}:}{Approximate nearest-neighbor search with a random projection forest.}
 #' }
@@ -33,6 +34,7 @@
 #' \code{\link{VptreeParam}},
 #' \code{\link{AnnoyParam}},
 #' \code{\link{HnswParam}},
+#' \code{\link{FlannKdtreeParam}},
 #' \code{\link{NndescentParam}}
 #' and \code{\link{RpforestParam}} for constructors.
 #' 

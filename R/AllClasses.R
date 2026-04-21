@@ -25,6 +25,9 @@ setClass("NndescentParam", contains="BiocNeighborParam", slots=c(nneighbors="int
 setClass("RpforestParam", contains="BiocNeighborParam", slots=c(nneighbors="integer", ntrees="integer", leaf.size="integer", max.tree.depth="integer"))
 
 #' @export
+setClass("FlannKdtreeParam", contains="BiocNeighborParam", slots=c(checks="integer"))
+
+#' @export
 setClass("BiocNeighborIndex", contains="VIRTUAL")
 
 #' @export
@@ -50,3 +53,6 @@ setClass("NndescentIndex", contains="BiocNeighborIndex", slots=c(index="list", d
 
 #' @export
 setClass("RpforestIndex", contains="BiocNeighborIndex", slots=c(index="list", data="ANY", names="ANY", param="RpforestParam"))
+
+#' @export
+setClass("FlannKdtreeIndex", contains="BiocNeighborIndex", slots=c(data="ANY", names="ANY", param="FlannKdtreeParam"))
