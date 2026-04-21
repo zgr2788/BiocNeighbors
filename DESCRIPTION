@@ -5,7 +5,8 @@ Title: Nearest Neighbor Detection for Bioconductor Packages
 Authors@R: c(person("Aaron", "Lun", role=c("aut", "cre", "cph"), email="infinite.monkeys.with.keyboards@gmail.com"))
 Imports: 
     Rcpp, 
-    methods
+    methods,
+    rnndescent (>= 0.1.8)
 Suggests: 
     Matrix,
     DelayedArray,
@@ -25,7 +26,7 @@ Description:
 License: GPL-3
 LinkingTo:
     Rcpp, 
-    assorthead,
+    assorthead (>= 1.4.0),
     beachmat
 VignetteBuilder: knitr
 SystemRequirements: C++17

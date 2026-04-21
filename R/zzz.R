@@ -5,4 +5,5 @@
     registerLoadGenericIndexClass("knncolle_hnsw::Hnsw", HnswIndex)
     registerLoadGenericIndexClass("knncolle_kmknn::Kmknn", KmknnIndex)
     registerLoadGenericIndexClass("knncolle::Vptree", VptreeIndex)
+    registerLoadIndexFunction(.nndescent_algorithm_name, .load_nndescent_index)
 }

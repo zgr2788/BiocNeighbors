@@ -3,7 +3,7 @@
 #include "Rtatami.h"
 
 #include "knncolle/knncolle.hpp"
-#include "knncolle_tatami/knncolle_tatami.hpp"
+#include "tatami/utils/consecutive_extractor.hpp"
 
 #include <stdexcept>
 #include <string>
@@ -11,6 +11,47 @@
 #include <vector>
 #include <optional>
 #include <cmath>
+
+class TatamiMatrixExtractor final : public knncolle::MatrixExtractor<double> {
+public:
+    TatamiMatrixExtractor(const tatami::NumericMatrix* ptr) :
+        my_ptr(ptr),
+        my_buffer(ptr->nrow()),
+        my_ext(ptr->dense_column())
+    {}
+
+private:
+    const tatami::NumericMatrix* my_ptr;
+    std::vector<double> my_buffer;
+    std::unique_ptr<tatami::MyopicDenseExtractor<double, int> > my_ext;
+    int my_at = 0;
+
+public:
+    const double* next() {
+        return my_ext->fetch(my_at++, my_buffer.data());
+    }
+};
+
+class TatamiMatrix final : public knncolle::Matrix<int, double> {
+public:
+    TatamiMatrix(const tatami::NumericMatrix* ptr) : my_ptr(ptr) {}
+
+private:
+    const tatami::NumericMatrix* my_ptr;
+
+public:
+    int num_observations() const {
+        return my_ptr->ncol();
+    }
+
+    std::size_t num_dimensions() const {
+        return my_ptr->nrow();
+    }
+
+    std::unique_ptr<knncolle::MatrixExtractor<double> > new_extractor() const {
+        return std::make_unique<TatamiMatrixExtractor>(my_ptr);
+    }
+};
 
 void check_nonfinite(const double* ptr, std::size_t n) {
     std::size_t count = 0; 
@@ -73,7 +114,7 @@ SEXP generic_build(SEXP builder, SEXP data, bool fail_nonfinite) {
             matptr.reset(new knncolle::SimpleMatrix<int, double>(mat->rows(), mat->cols(), mat->begin()));
             break;
         case EXTPTRSXP:
-            matptr.reset(new knncolle_tatami::Matrix<int, double, double, int, const tatami::NumericMatrix*>(Rtatami::BoundNumericPointer(data)->get(), false));
+            matptr.reset(new TatamiMatrix(Rtatami::BoundNumericPointer(data)->get()));
             break;
         default:
             throw std::runtime_error("unknown type for 'data'");
@@ -623,12 +664,7 @@ SEXP generic_query_all(SEXP prebuilt_ptr, SEXP query, Rcpp::NumericVector thresh
 
 //[[Rcpp::export(rng=false)]]
 SEXP generic_save_index(SEXP prebuilt_ptr, std::string prefix) {
-    BiocNeighbors::PrebuiltPointer cast(prebuilt_ptr); 
-    if (!R_ExternalPtrAddr(SEXP(cast))) {
-        throw std::runtime_error("null pointer to a prebuilt index");
-    }
-
-    const auto& prebuilt = *cast;
-    prebuilt.save(prefix);
-    return R_NilValue;
+    throw std::runtime_error(
+        "saving generic C++ indices is not supported by the installed 'knncolle' headers"
+    );
 }

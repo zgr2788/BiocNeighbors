@@ -1,8 +1,19 @@
 # library(testthat); library(BiocNeighbors); source("test-loadIndex.R")
 
-test_that("saving and loading works for all of our algorithms", {
+test_that("saving and loading works for generic algorithms when supported", {
+    skip_if(is.null(getLoadGenericIndexRegistry()), "generic C++ index serialization is unavailable with this knncolle version")
+
     Y <- matrix(rnorm(10000), ncol=20)
-    algos <- list(vptree=VptreeParam(), kmknn=KmknnParam(), brute=ExhaustiveParam(), annoy=AnnoyParam(), hnsw=HnswParam())
+    algos <- list(
+        vptree=VptreeParam(),
+        kmknn=KmknnParam(),
+        brute=ExhaustiveParam(),
+        annoy=AnnoyParam(),
+        hnsw=HnswParam()
+    )
+    if (requireNamespace("rnndescent", quietly=TRUE)) {
+        algos$nndescent <- NndescentParam()
+    }
 
     for (algo in names(algos)) {
         idx <- buildIndex(Y, BNPARAM=algos[[algo]])
@@ -16,7 +27,9 @@ test_that("saving and loading works for all of our algorithms", {
     }
 })
 
-test_that("saving and loading respects the names", {
+test_that("saving and loading respects the names when supported", {
+    skip_if(is.null(getLoadGenericIndexRegistry()), "generic C++ index serialization is unavailable with this knncolle version")
+
     Y <- matrix(rnorm(10000), ncol=20)
     rownames(Y) <- sprintf("SAMPLE_%s", seq_len(nrow(Y)))
     idx <- buildIndex(Y)
@@ -29,7 +42,9 @@ test_that("saving and loading respects the names", {
     expect_identical(reloaded@names, rownames(Y))
 })
 
-test_that("saving and loading works for cosine distances", {
+test_that("saving and loading works for cosine distances when supported", {
+    skip_if(is.null(getLoadGenericIndexRegistry()), "generic C++ index serialization is unavailable with this knncolle version")
+
     Y <- matrix(rnorm(10000), ncol=20)
     idx <- buildIndex(Y, VptreeParam(distance="Cosine"))
 
