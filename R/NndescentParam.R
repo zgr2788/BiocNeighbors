@@ -57,7 +57,7 @@
 #'
 #' @export
 #' @importFrom methods new
-NndescentParam <- function(nneighbors=30, ntrees=5, max.candidates=60, niter=5, distance=c("Euclidean", "Manhattan", "Cosine")) {
+NndescentParam <- function(nneighbors=20, ntrees=3, max.candidates=20, niter=3, distance=c("Euclidean", "Manhattan", "Cosine")) {
     new(
         "NndescentParam",
         nneighbors=as.integer(nneighbors),
@@ -182,6 +182,31 @@ NndescentIndex <- function(index, data, names, param) {
     as.integer(subset)
 }
 
+.extract_nndescent_graph <- function(BNINDEX) {
+    graph <- BNINDEX@index$graph
+    if (!is.list(graph) || is.null(graph$idx) || is.null(graph$dist)) {
+        return(NULL)
+    }
+    graph
+}
+
+.can_reuse_nndescent_graph <- function(BNINDEX, k) {
+    graph <- .extract_nndescent_graph(BNINDEX)
+    if (is.null(graph)) {
+        return(FALSE)
+    }
+
+    nstored <- ncol(graph$idx)
+    if (is(k, "AsIs")) {
+        if (!length(k)) {
+            return(TRUE)
+        }
+        max(k) <= nstored
+    } else {
+        as.integer(k) <= nstored
+    }
+}
+
 .cap_nndescent_k <- function(k, limit) {
     capped <- pmin(as.integer(k), limit)
     if (any(as.integer(k) != capped)) {
@@ -254,6 +279,22 @@ NndescentIndex <- function(index, data, names, param) {
     list(index=out.index, distance=out.distance)
 }
 
+.nndescent_graph_self <- function(BNINDEX, ids, k) {
+    graph <- .extract_nndescent_graph(BNINDEX)
+    if (!length(ids)) {
+        return(list(index=matrix(integer(0), 0, k), distance=matrix(numeric(0), 0, k)))
+    }
+
+    if (!k) {
+        return(list(index=matrix(integer(0), length(ids), 0), distance=matrix(numeric(0), length(ids), 0)))
+    }
+
+    list(
+        index=graph$idx[ids, seq_len(k), drop=FALSE],
+        distance=graph$dist[ids, seq_len(k), drop=FALSE]
+    )
+}
+
 .nndescent_query_self <- function(BNINDEX, ids, k, num.threads) {
     if (!length(ids)) {
         return(list(index=matrix(integer(0), 0, k), distance=matrix(numeric(0), 0, k)))
@@ -313,11 +354,19 @@ setMethod("findKnnFromIndex", "NndescentIndex", function(BNINDEX, k, get.index=T
 
     if (variable) {
         max.k <- if (length(k)) max(k) else 0L
-        found <- .nndescent_query_self(BNINDEX, chosen, max.k, num.threads)
+        if (.can_reuse_nndescent_graph(BNINDEX, k)) {
+            found <- .nndescent_graph_self(BNINDEX, chosen, max.k)
+        } else {
+            found <- .nndescent_query_self(BNINDEX, chosen, max.k, num.threads)
+        }
         sliced <- .extract_variable_neighbors(found$index, found$distance, k)
         .format_nndescent_output(sliced$index, sliced$distance, get.index, get.distance, variable=TRUE)
     } else {
-        found <- .nndescent_query_self(BNINDEX, chosen, as.integer(k), num.threads)
+        if (.can_reuse_nndescent_graph(BNINDEX, k)) {
+            found <- .nndescent_graph_self(BNINDEX, chosen, as.integer(k))
+        } else {
+            found <- .nndescent_query_self(BNINDEX, chosen, as.integer(k), num.threads)
+        }
         found <- .orient_nndescent_output(found)
         .format_nndescent_output(found$index, found$distance, get.index, get.distance, variable=FALSE)
     }

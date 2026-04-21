@@ -22,6 +22,9 @@ setClass("HnswParam", contains="BiocNeighborParam", slots=c(nlinks="integer", ef
 setClass("NndescentParam", contains="BiocNeighborParam", slots=c(nneighbors="integer", ntrees="integer", max.candidates="integer", niter="integer"))
 
 #' @export
+setClass("RpforestParam", contains="BiocNeighborParam", slots=c(nneighbors="integer", ntrees="integer", leaf.size="integer", max.tree.depth="integer"))
+
+#' @export
 setClass("BiocNeighborIndex", contains="VIRTUAL")
 
 #' @export
@@ -44,3 +47,6 @@ setClass("HnswIndex", contains="BiocNeighborGenericIndex")
 
 #' @export
 setClass("NndescentIndex", contains="BiocNeighborIndex", slots=c(index="list", data="ANY", names="ANY", param="NndescentParam"))
+
+#' @export
+setClass("RpforestIndex", contains="BiocNeighborIndex", slots=c(index="list", data="ANY", names="ANY", param="RpforestParam"))

@@ -13,6 +13,7 @@ test_that("saving and loading works for generic algorithms when supported", {
     )
     if (requireNamespace("rnndescent", quietly=TRUE)) {
         algos$nndescent <- NndescentParam()
+        algos$rpforest <- RpforestParam()
     }
 
     for (algo in names(algos)) {
