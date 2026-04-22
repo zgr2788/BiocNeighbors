@@ -5,6 +5,7 @@
 #'
 #' @param checks Integer scalar specifying the number of FLANN checks during
 #' search. Larger values improve accuracy at the cost of slower searches.
+#' The default is intentionally speed-oriented for approximate searches.
 #' @inheritParams ExhaustiveParam
 #'
 #' @details
@@ -56,7 +57,7 @@
 #'
 #' @export
 #' @importFrom methods new
-FlannKdtreeParam <- function(checks=64L, distance=c("Euclidean", "Cosine")) {
+FlannKdtreeParam <- function(checks=8L, distance=c("Euclidean", "Cosine")) {
     new("FlannKdtreeParam", checks=as.integer(checks), distance=match.arg(distance))
 }
 
@@ -172,17 +173,27 @@ FlannKdtreeIndex <- function(data, names, param) {
 }
 
 .extract_flann_variable_neighbors <- function(index, distance, k) {
-    list(
-        index=lapply(seq_len(nrow(index)), function(i) index[i,seq_len(k[i]),drop=TRUE]),
-        distance=lapply(seq_len(nrow(distance)), function(i) distance[i,seq_len(k[i]),drop=TRUE])
-    )
+    output <- list()
+
+    if (!is.null(index)) {
+        output$index <- lapply(seq_len(nrow(index)), function(i) index[i,seq_len(k[i]),drop=TRUE])
+    }
+    if (!is.null(distance)) {
+        output$distance <- lapply(seq_len(nrow(distance)), function(i) distance[i,seq_len(k[i]),drop=TRUE])
+    }
+
+    output
 }
 
 .orient_flann_output <- function(found) {
-    list(
-        index=t(found$index),
-        distance=t(found$distance)
-    )
+    output <- list()
+    if (!is.null(found$index)) {
+        output$index <- t(found$index)
+    }
+    if (!is.null(found$distance)) {
+        output$distance <- t(found$distance)
+    }
+    output
 }
 
 .format_flann_output <- function(index, distance, get.index, get.distance, variable=FALSE) {
@@ -228,50 +239,74 @@ FlannKdtreeIndex <- function(data, names, param) {
     NULL
 }
 
-.run_flann_kdtree <- function(query, reference, k, checks, num.threads=1L) {
+.run_flann_kdtree <- function(query, reference, k, checks, num.threads=1L, get.distance=TRUE) {
     nobs <- nrow(query)
     if (!k) {
         return(list(
             index=matrix(integer(0), nobs, 0),
-            distance=matrix(numeric(0), nobs, 0)
+            distance=if (get.distance) matrix(numeric(0), nobs, 0) else NULL
         ))
     }
 
-    found <- rflann::Neighbour(
-        query=query,
-        ref=reference,
-        k=k,
-        build="kdtree",
-        cores=max(1L, as.integer(num.threads)),
-        checks=as.integer(checks)
-    )
+    idx <- NULL
+    dist <- NULL
+    safe.threads <- max(1L, as.integer(num.threads))
 
-    idx <- .coerce_flann_matrix(found$indices, nobs, k)
-    dist <- .coerce_flann_matrix(found$distances, nobs, k)
-    if (is.null(idx) || is.null(dist)) {
-        stop("failed to coerce FLANN search results into the expected matrix shape")
+    if (!get.distance && safe.threads == 1L) {
+        idx <- .coerce_flann_matrix(rflann::FastKDNeighbour(query, reference, k=k), nobs, k)
+        if (is.null(idx)) {
+            stop("failed to coerce FLANN kd-tree indices into the expected matrix shape")
+        }
+    } else {
+        found <- rflann::Neighbour(
+            query=query,
+            ref=reference,
+            k=k,
+            build="kdtree",
+            cores=safe.threads,
+            checks=as.integer(checks)
+        )
+
+        idx <- .coerce_flann_matrix(found$indices, nobs, k)
+        if (is.null(idx)) {
+            stop("failed to coerce FLANN search indices into the expected matrix shape")
+        }
+
+        if (get.distance) {
+            dist <- .coerce_flann_matrix(found$distances, nobs, k)
+            if (is.null(dist)) {
+                stop("failed to coerce FLANN search distances into the expected matrix shape")
+            }
+            dist <- sqrt(dist)
+        }
     }
 
-    list(index=idx, distance=sqrt(dist))
+    list(index=idx, distance=dist)
 }
 
 .drop_flann_self_matches <- function(index, distance, self.ids, keep) {
     nr <- nrow(index)
     out.index <- matrix(NA_integer_, nr, keep)
-    out.distance <- matrix(NA_real_, nr, keep)
+    out.distance <- if (is.null(distance)) NULL else matrix(NA_real_, nr, keep)
 
     for (i in seq_len(nr)) {
         chosen <- index[i,] != self.ids[i]
         current.index <- index[i,chosen]
-        current.distance <- distance[i,chosen]
+        if (!is.null(distance)) {
+            current.distance <- distance[i,chosen]
+        }
         if (length(current.index) > keep) {
             current.index <- current.index[seq_len(keep)]
-            current.distance <- current.distance[seq_len(keep)]
+            if (!is.null(distance)) {
+                current.distance <- current.distance[seq_len(keep)]
+            }
         }
 
         if (keep && length(current.index)) {
             out.index[i,seq_along(current.index)] <- current.index
-            out.distance[i,seq_along(current.distance)] <- current.distance
+            if (!is.null(distance)) {
+                out.distance[i,seq_along(current.distance)] <- current.distance
+            }
         }
     }
 
@@ -302,17 +337,26 @@ setMethod("findKnnFromIndex", "FlannKdtreeIndex", function(BNINDEX, k, get.index
     variable <- is(k, "AsIs")
     max.k <- if (length(k)) max(k) else 0L
 
+    report.distance <- !isFALSE(get.distance)
+
     if (!length(chosen)) {
-        found <- list(index=matrix(integer(0), 0, max.k), distance=matrix(numeric(0), 0, max.k))
+        found <- list(
+            index=matrix(integer(0), 0, max.k),
+            distance=if (report.distance) matrix(numeric(0), 0, max.k) else NULL
+        )
     } else if (!max.k) {
-        found <- list(index=matrix(integer(0), length(chosen), 0), distance=matrix(numeric(0), length(chosen), 0))
+        found <- list(
+            index=matrix(integer(0), length(chosen), 0),
+            distance=if (report.distance) matrix(numeric(0), length(chosen), 0) else NULL
+        )
     } else {
         found <- .run_flann_kdtree(
             query=BNINDEX@data[chosen,,drop=FALSE],
             reference=BNINDEX@data,
             k=min(max.k + 1L, nrow(BNINDEX@data)),
             checks=BNINDEX@param@checks,
-            num.threads=num.threads
+            num.threads=num.threads,
+            get.distance=report.distance
         )
         found <- .drop_flann_self_matches(found$index, found$distance, chosen, max.k)
     }
@@ -352,12 +396,15 @@ setMethod("queryKnnFromIndex", "FlannKdtreeIndex", function(
     variable <- is(k, "AsIs")
     max.k <- if (length(k)) max(k) else 0L
 
+    report.distance <- !isFALSE(get.distance)
+
     found <- .run_flann_kdtree(
         query=query,
         reference=BNINDEX@data,
         k=max.k,
         checks=BNINDEX@param@checks,
-        num.threads=num.threads
+        num.threads=num.threads,
+        get.distance=report.distance
     )
 
     if (variable) {

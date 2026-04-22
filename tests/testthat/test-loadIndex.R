@@ -17,6 +17,7 @@ test_that("saving and loading works for generic algorithms when supported", {
     }
     if (requireNamespace("rflann", quietly=TRUE)) {
         algos$flann_kdtree <- FlannKdtreeParam()
+        algos$flann_kmeans <- FlannKmeansParam()
     }
 
     for (algo in names(algos)) {
