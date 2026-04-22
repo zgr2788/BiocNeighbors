@@ -10,10 +10,10 @@
 \title{The NndescentParam class}
 \usage{
 NndescentParam(
-  nneighbors = 30,
-  ntrees = 5,
-  max.candidates = 60,
-  niter = 5,
+  nneighbors = 20,
+  ntrees = 3,
+  max.candidates = 20,
+  niter = 3,
   distance = c("Euclidean", "Manhattan", "Cosine")
 )
 }
@@ -70,5 +70,5 @@ methods.
 for details on the underlying implementation.
 }
 \author{
-Aaron Lun
+Oz Beker
 }

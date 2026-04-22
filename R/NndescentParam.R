@@ -31,7 +31,7 @@
 #' \code{NndescentIndex} class.
 #'
 #' @author
-#' Aaron Lun
+#' Oz Beker
 #'
 #' @seealso
 #' \linkS4class{BiocNeighborParam}, for the parent class and its available
