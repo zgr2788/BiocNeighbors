@@ -13,23 +13,30 @@
 \alias{buildIndex,list-method}
 \title{Build a nearest-neighbor index}
 \usage{
-buildIndex(X, BNPARAM, transposed = FALSE, ...)
+buildIndex(
+  X,
+  BNPARAM,
+  transposed = FALSE,
+  num.threads = 1,
+  BPPARAM = NULL,
+  ...
+)
 
-\S4method{buildIndex}{FlannKdtreeParam}(X, BNPARAM, transposed = FALSE, ..., .check.nonfinite = TRUE)
+\S4method{buildIndex}{FlannKdtreeParam}(X, BNPARAM, transposed = FALSE, num.threads = 1, BPPARAM = NULL, ..., .check.nonfinite = TRUE)
 
-\S4method{buildIndex}{FlannKmeansParam}(X, BNPARAM, transposed = FALSE, ..., .check.nonfinite = TRUE)
+\S4method{buildIndex}{FlannKmeansParam}(X, BNPARAM, transposed = FALSE, num.threads = 1, BPPARAM = NULL, ..., .check.nonfinite = TRUE)
 
-\S4method{buildIndex}{NndescentParam}(X, BNPARAM, transposed = FALSE, ..., .check.nonfinite = TRUE)
+\S4method{buildIndex}{NndescentParam}(X, BNPARAM, transposed = FALSE, num.threads = 1, BPPARAM = NULL, ..., .check.nonfinite = TRUE)
 
-\S4method{buildIndex}{RpforestParam}(X, BNPARAM, transposed = FALSE, ..., .check.nonfinite = TRUE)
+\S4method{buildIndex}{RpforestParam}(X, BNPARAM, transposed = FALSE, num.threads = 1, BPPARAM = NULL, ..., .check.nonfinite = TRUE)
 
-\S4method{buildIndex}{missing}(X, BNPARAM, transposed = FALSE, ...)
+\S4method{buildIndex}{missing}(X, BNPARAM, transposed = FALSE, num.threads = 1, BPPARAM = NULL, ...)
 
-\S4method{buildIndex}{NULL}(X, BNPARAM, transposed = FALSE, ...)
+\S4method{buildIndex}{NULL}(X, BNPARAM, transposed = FALSE, num.threads = 1, BPPARAM = NULL, ...)
 
-\S4method{buildIndex}{BiocNeighborParam}(X, BNPARAM, transposed = FALSE, ...)
+\S4method{buildIndex}{BiocNeighborParam}(X, BNPARAM, transposed = FALSE, num.threads = 1, BPPARAM = NULL, ...)
 
-\S4method{buildIndex}{list}(X, BNPARAM, transposed = FALSE, ..., .check.nonfinite = TRUE)
+\S4method{buildIndex}{list}(X, BNPARAM, transposed = FALSE, num.threads = 1, BPPARAM = NULL, ..., .check.nonfinite = TRUE)
 }
 \arguments{
 \item{X}{A numeric matrix or matrix-like object where rows correspond to data points and columns correspond to variables (i.e., dimensions).}
@@ -39,6 +46,10 @@ If \code{NULL} or missing, this defaults to a \linkS4class{KmknnParam} object.
 Alternatively, this may be a list returned by \code{\link{defineBuilder}}.}
 
 \item{transposed}{Logical scalar indicating whether \code{X} is transposed, i.e., rows are variables and columns are data points.}
+
+\item{num.threads}{Integer scalar specifying the number of threads to use for index construction, where supported.}
+
+\item{BPPARAM}{Soft-deprecated, use \code{num.threads} instead.}
 
 \item{...}{Further arguments to be passed to individual methods.
 If a method accepts arguments here, it should prefix these arguments with the algorithm name to avoid conflicts, e.g., \code{vptree.foo.bar}.}
@@ -63,6 +74,9 @@ Otherwise, developers are responsible for defining methods for their subclass in
 
 Users should assume that the index is not serializable (i.e., saved or transferred between processes) via R's usual mechanisms.
 If the index must be saved to disk, consider using \code{\link{saveIndex}} instead.
+
+All build methods accept \code{num.threads} and \code{BPPARAM} for interface consistency.
+Backends with explicit threaded build implementations will use the resolved worker count during index construction.
 }
 \examples{
 Y <- matrix(rnorm(100000), ncol=20)

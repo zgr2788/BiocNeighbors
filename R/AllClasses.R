@@ -31,6 +31,9 @@ setClass("FlannKdtreeParam", contains="BiocNeighborParam", slots=c(checks="integ
 setClass("FlannKmeansParam", contains="BiocNeighborParam", slots=c(checks="integer"))
 
 #' @export
+setClass("MlpackLshParam", contains="BiocNeighborParam", slots=c(num.tables="integer", projections="integer", bucket.size="integer", second.hash.size="integer", num.probes="integer", seed="integer"))
+
+#' @export
 setClass("BiocNeighborIndex", contains="VIRTUAL")
 
 #' @export
@@ -62,3 +65,6 @@ setClass("FlannKdtreeIndex", contains="BiocNeighborIndex", slots=c(data="ANY", n
 
 #' @export
 setClass("FlannKmeansIndex", contains="BiocNeighborIndex", slots=c(data="ANY", names="ANY", param="FlannKmeansParam"))
+
+#' @export
+setClass("MlpackLshIndex", contains="BiocNeighborIndex", slots=c(index="ANY", data="ANY", names="ANY", param="MlpackLshParam"))

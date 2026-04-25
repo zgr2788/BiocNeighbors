@@ -88,11 +88,23 @@ FlannKmeansIndex <- function(data, names, param) {
 
 .run_flann_kmeans <- function(query, reference, k, checks, num.threads=1L, get.distance=TRUE) {
     nobs <- nrow(query)
-    if (!k) {
+    if (!nobs || !k) {
         return(list(
-            index=matrix(integer(0), nobs, 0),
-            distance=if (get.distance) matrix(numeric(0), nobs, 0) else NULL
+            index=matrix(integer(0), nobs, k),
+            distance=if (get.distance) matrix(numeric(0), nobs, k) else NULL
         ))
+    }
+
+    if (nrow(reference) <= 1L) {
+        out <- queryKNN(
+            reference,
+            query=query,
+            k=k,
+            BNPARAM=KmknnParam(distance="Euclidean"),
+            get.distance=get.distance,
+            num.threads=num.threads
+        )
+        return(list(index=out$index, distance=out$distance))
     }
 
     found <- rflann::Neighbour(
@@ -123,8 +135,9 @@ FlannKmeansIndex <- function(data, names, param) {
 
 #' @export
 #' @rdname buildIndex
-setMethod("buildIndex", "FlannKmeansParam", function(X, BNPARAM, transposed=FALSE, ..., .check.nonfinite=TRUE) {
+setMethod("buildIndex", "FlannKmeansParam", function(X, BNPARAM, transposed=FALSE, num.threads=1, BPPARAM=NULL, ..., .check.nonfinite=TRUE) {
     .require_rflann()
+    .resolve_num_threads(num.threads, BPPARAM)
 
     X <- .coerce_flann_observation_rows(X, transposed=transposed)
     if (.check.nonfinite && any(!is.finite(as.matrix(X)))) {
@@ -141,8 +154,9 @@ setMethod("findKnnFromIndex", "FlannKmeansIndex", function(BNINDEX, k, get.index
     .require_rflann()
 
     chosen <- .subset_flann_index(BNINDEX, subset)
-    k <- .cap_flann_k(k, max(nrow(BNINDEX@data) - 1L, 0L))
-    variable <- is(k, "AsIs")
+    validated <- .validate_and_cap_k(k, length(chosen), max(nrow(BNINDEX@data) - 1L, 0L))
+    k <- validated$k
+    variable <- validated$variable
     max.k <- if (length(k)) max(k) else 0L
 
     report.distance <- !isFALSE(get.distance)
@@ -200,8 +214,9 @@ setMethod("queryKnnFromIndex", "FlannKmeansIndex", function(
     }
 
     query <- .prepare_flann_query(query, BNINDEX@param)
-    k <- .cap_flann_k(k, nrow(BNINDEX@data))
-    variable <- is(k, "AsIs")
+    validated <- .validate_and_cap_k(k, nrow(query), nrow(BNINDEX@data))
+    k <- validated$k
+    variable <- validated$variable
     max.k <- if (length(k)) max(k) else 0L
 
     report.distance <- !isFALSE(get.distance)
@@ -228,13 +243,7 @@ setMethod("queryKnnFromIndex", "FlannKmeansIndex", function(
 #' @rdname findDistance
 setMethod("findDistanceFromIndex", "FlannKmeansIndex", function(BNINDEX, k, num.threads=1, subset=NULL, ...) {
     found <- findKnnFromIndex(BNINDEX, k=k, get.index=FALSE, get.distance=TRUE, num.threads=num.threads, subset=subset)
-    if (is(k, "AsIs")) {
-        vapply(found$distance, function(x) if (length(x)) x[length(x)] else NA_real_, 0)
-    } else if (ncol(found$distance)) {
-        found$distance[,ncol(found$distance)]
-    } else {
-        rep(NA_real_, nrow(found$distance))
-    }
+    .last_distance_from_knn(found, k)
 })
 
 #' @export
@@ -262,13 +271,7 @@ setMethod("queryDistanceFromIndex", "FlannKmeansIndex", function(
         .check.nonfinite=.check.nonfinite
     )
 
-    if (is(k, "AsIs")) {
-        vapply(found$distance, function(x) if (length(x)) x[length(x)] else NA_real_, 0)
-    } else if (ncol(found$distance)) {
-        found$distance[,ncol(found$distance)]
-    } else {
-        rep(NA_real_, nrow(found$distance))
-    }
+    .last_distance_from_knn(found, k)
 })
 
 #' @export

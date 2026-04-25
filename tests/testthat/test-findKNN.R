@@ -127,6 +127,17 @@ test_that("findKNN works with prebuilt indices", {
     expect_error(findKNN(readRDS(tmp), k=1), "null pointer")
 })
 
+test_that("buildIndex accepts the shared threading interface", {
+    Y <- matrix(rnorm(10000), ncol=20)
+
+    built <- buildIndex(Y, BPPARAM=BiocParallel::SnowParam(2))
+    out <- findKNN(built, k=8, BPPARAM=BiocParallel::SnowParam(2))
+
+    expect_s4_class(built, "KmknnIndex")
+    expect_identical(dim(out$index), c(nrow(Y), 8L))
+    expect_identical(dim(out$distance), c(nrow(Y), 8L))
+})
+
 test_that("findKNN works with variable outputs", {
     Y <- matrix(rnorm(10000), ncol=20)
 

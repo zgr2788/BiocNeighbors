@@ -12,7 +12,7 @@ test_that("queryDistance works with basic options", {
 
     # Respects alternative methods.
     adist <- queryDistance(Y, Z, k=8, BNPARAM=AnnoyParam())
-    expect_false(identical(dist, adist))
+    expect_false(identical(out, adist))
 
     expect_error(queryDistance(Y, Z[,0], k=8), "mismatch")
 })
@@ -24,6 +24,9 @@ test_that("queryDistance works in parallel", {
     out <- queryDistance(Y, Z, k=8)
     pout <- queryDistance(Y, Z, k=8, num.threads=2)
     expect_equal(out, pout)
+
+    bpout <- queryDistance(Y, Z, k=8, BPPARAM=BiocParallel::SnowParam(2))
+    expect_equal(out, bpout)
 })
 
 library(DelayedArray)

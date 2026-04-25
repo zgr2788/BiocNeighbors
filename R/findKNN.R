@@ -105,11 +105,9 @@ setMethod("findKnnFromIndex", "BiocNeighborGenericIndex", function(BNINDEX, k, g
 #' @export
 #' @rdname findKNN
 findKNN <- function(X, k, get.index=TRUE, get.distance=TRUE, num.threads=1, subset=NULL, ..., BPPARAM=NULL, BNPARAM=NULL) {
-    if (!is.null(BPPARAM)) {
-        num.threads <- BiocParallel::bpnworkers(BPPARAM)
-    }
+    num.threads <- .resolve_num_threads(num.threads, BPPARAM)
     if (!is(X, "BiocNeighborIndex")) {
-        X <- buildIndex(X, ..., BNPARAM=BNPARAM)
+        X <- buildIndex(X, ..., BNPARAM=BNPARAM, num.threads=num.threads)
     }
 
     findKnnFromIndex(
@@ -119,7 +117,6 @@ findKNN <- function(X, k, get.index=TRUE, get.distance=TRUE, num.threads=1, subs
         get.distance=get.distance,
         num.threads=num.threads,
         subset=subset,
-        ...,
-        BPPARAM=BPPARAM
+        ...
     )
 }

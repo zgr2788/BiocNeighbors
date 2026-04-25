@@ -129,7 +129,7 @@ NndescentIndex <- function(index, data, names, param) {
     }
 
     if (!is.null(subset)) {
-        x <- x[subset,,drop=FALSE]
+        x <- x[.validate_subset_indices(subset, nrow(x), rownames(x)),,drop=FALSE]
     }
 
     x
@@ -160,26 +160,7 @@ NndescentIndex <- function(index, data, names, param) {
 }
 
 .subset_nndescent_index <- function(index, subset) {
-    if (is.null(subset)) {
-        return(seq_len(nrow(index@data)))
-    }
-
-    if (is.character(subset)) {
-        if (is.null(index@names)) {
-            stop("cannot use character 'subset' when observation names are not available")
-        }
-        subset <- match(subset, index@names)
-        if (anyNA(subset)) {
-            stop("failed to match some entries in 'subset' to observation names")
-        }
-        return(as.integer(subset))
-    }
-
-    if (is.logical(subset)) {
-        return(which(subset))
-    }
-
-    as.integer(subset)
+    .validate_subset_indices(subset, nrow(index@data), index@names)
 }
 
 .extract_nndescent_graph <- function(BNINDEX) {
@@ -197,7 +178,7 @@ NndescentIndex <- function(index, data, names, param) {
     }
 
     nstored <- ncol(graph$idx)
-    if (is(k, "AsIs")) {
+    if (.is_variable_k(k)) {
         if (!length(k)) {
             return(TRUE)
         }
@@ -279,6 +260,17 @@ NndescentIndex <- function(index, data, names, param) {
     list(index=out.index, distance=out.distance)
 }
 
+.fallback_nndescent_query <- function(reference, query, k, distance, num.threads=1L) {
+    out <- queryKNN(
+        reference,
+        query=query,
+        k=k,
+        BNPARAM=KmknnParam(distance=distance),
+        num.threads=num.threads
+    )
+    list(index=out$index, distance=out$distance)
+}
+
 .nndescent_graph_self <- function(BNINDEX, ids, k) {
     graph <- .extract_nndescent_graph(BNINDEX)
     if (!length(ids)) {
@@ -318,8 +310,9 @@ NndescentIndex <- function(index, data, names, param) {
 
 #' @export
 #' @rdname buildIndex
-setMethod("buildIndex", "NndescentParam", function(X, BNPARAM, transposed=FALSE, ..., .check.nonfinite=TRUE) {
+setMethod("buildIndex", "NndescentParam", function(X, BNPARAM, transposed=FALSE, num.threads=1, BPPARAM=NULL, ..., .check.nonfinite=TRUE) {
     .require_rnndescent()
+    num.threads <- .resolve_num_threads(num.threads, BPPARAM)
 
     X <- .coerce_observation_rows(X, transposed=transposed)
     if (.check.nonfinite && any(!is.finite(as.matrix(X)))) {
@@ -328,17 +321,28 @@ setMethod("buildIndex", "NndescentParam", function(X, BNPARAM, transposed=FALSE,
 
     processed <- .prepare_nndescent_reference(X, BNPARAM)
     safe.k <- .cap_nndescent_k(BNPARAM@nneighbors, max(nrow(processed$data) - 1L, 0L))
-    idx <- rnndescent::rnnd_build(
-        data=processed$data,
-        k=safe.k,
-        metric=processed$metric,
-        n_trees=BNPARAM@ntrees,
-        n_iters=BNPARAM@niter,
-        max_candidates=BNPARAM@max.candidates,
-        n_threads=1L,
-        verbose=FALSE,
-        progress="bar"
-    )
+
+    if (nrow(processed$data) <= 1L) {
+        idx <- list(
+            graph=list(
+                idx=matrix(integer(0), nrow(processed$data), 0),
+                dist=matrix(numeric(0), nrow(processed$data), 0)
+            ),
+            empty=TRUE
+        )
+    } else {
+        idx <- rnndescent::rnnd_build(
+            data=processed$data,
+            k=safe.k,
+            metric=processed$metric,
+            n_trees=BNPARAM@ntrees,
+            n_iters=BNPARAM@niter,
+            max_candidates=BNPARAM@max.candidates,
+            n_threads=num.threads,
+            verbose=FALSE,
+            progress="bar"
+        )
+    }
 
     NndescentIndex(index=idx, data=processed$data, names=rownames(processed$data), param=BNPARAM)
 })
@@ -349,8 +353,9 @@ setMethod("findKnnFromIndex", "NndescentIndex", function(BNINDEX, k, get.index=T
     .require_rnndescent()
 
     chosen <- .subset_nndescent_index(BNINDEX, subset)
-    k <- .cap_nndescent_k(k, max(nrow(BNINDEX@data) - 1L, 0L))
-    variable <- is(k, "AsIs")
+    validated <- .validate_and_cap_k(k, length(chosen), max(nrow(BNINDEX@data) - 1L, 0L))
+    k <- validated$k
+    variable <- validated$variable
 
     if (variable) {
         max.k <- if (length(k)) max(k) else 0L
@@ -394,13 +399,22 @@ setMethod("queryKnnFromIndex", "NndescentIndex", function(
     }
 
     query <- .prepare_nndescent_query(query, BNINDEX@param)
-    k <- .cap_nndescent_k(k, nrow(BNINDEX@data))
-    variable <- is(k, "AsIs")
+    validated <- .validate_and_cap_k(k, nrow(query), nrow(BNINDEX@data))
+    k <- validated$k
+    variable <- validated$variable
     max.k <- if (length(k)) max(k) else 0L
 
-    if (!max.k) {
+    if (!nrow(query) || !max.k) {
         nr <- nrow(query)
-        found <- list(index=matrix(integer(0), nr, 0), distance=matrix(numeric(0), nr, 0))
+        found <- list(index=matrix(integer(0), nr, max.k), distance=matrix(numeric(0), nr, max.k))
+    } else if (isTRUE(BNINDEX@index$empty)) {
+        found <- .fallback_nndescent_query(
+            reference=BNINDEX@data,
+            query=query,
+            k=max.k,
+            distance=bndistance(BNINDEX@param),
+            num.threads=num.threads
+        )
     } else {
         found <- rnndescent::rnnd_query(
             index=BNINDEX@index,
@@ -425,13 +439,7 @@ setMethod("queryKnnFromIndex", "NndescentIndex", function(
 #' @rdname findDistance
 setMethod("findDistanceFromIndex", "NndescentIndex", function(BNINDEX, k, num.threads=1, subset=NULL, ...) {
     found <- findKnnFromIndex(BNINDEX, k=k, get.index=FALSE, get.distance=TRUE, num.threads=num.threads, subset=subset)
-    if (is(k, "AsIs")) {
-        vapply(found$distance, function(x) if (length(x)) x[length(x)] else NA_real_, 0)
-    } else if (ncol(found$distance)) {
-        found$distance[,ncol(found$distance)]
-    } else {
-        rep(NA_real_, nrow(found$distance))
-    }
+    .last_distance_from_knn(found, k)
 })
 
 #' @export
@@ -459,13 +467,7 @@ setMethod("queryDistanceFromIndex", "NndescentIndex", function(
         .check.nonfinite=.check.nonfinite
     )
 
-    if (is(k, "AsIs")) {
-        vapply(found$distance, function(x) if (length(x)) x[length(x)] else NA_real_, 0)
-    } else if (ncol(found$distance)) {
-        found$distance[,ncol(found$distance)]
-    } else {
-        rep(NA_real_, nrow(found$distance))
-    }
+    .last_distance_from_knn(found, k)
 })
 
 #' @export

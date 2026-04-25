@@ -108,7 +108,7 @@ FlannKdtreeIndex <- function(data, names, param) {
     }
 
     if (!is.null(subset)) {
-        x <- x[subset,,drop=FALSE]
+        x <- x[.validate_subset_indices(subset, nrow(x), rownames(x)),,drop=FALSE]
     }
 
     x
@@ -138,26 +138,7 @@ FlannKdtreeIndex <- function(data, names, param) {
 }
 
 .subset_flann_index <- function(index, subset) {
-    if (is.null(subset)) {
-        return(seq_len(nrow(index@data)))
-    }
-
-    if (is.character(subset)) {
-        if (is.null(index@names)) {
-            stop("cannot use character 'subset' when observation names are not available")
-        }
-        subset <- match(subset, index@names)
-        if (anyNA(subset)) {
-            stop("failed to match some entries in 'subset' to observation names")
-        }
-        return(as.integer(subset))
-    }
-
-    if (is.logical(subset)) {
-        return(which(subset))
-    }
-
-    as.integer(subset)
+    .validate_subset_indices(subset, nrow(index@data), index@names)
 }
 
 .cap_flann_k <- function(k, limit) {
@@ -241,11 +222,23 @@ FlannKdtreeIndex <- function(data, names, param) {
 
 .run_flann_kdtree <- function(query, reference, k, checks, num.threads=1L, get.distance=TRUE) {
     nobs <- nrow(query)
-    if (!k) {
+    if (!nobs || !k) {
         return(list(
-            index=matrix(integer(0), nobs, 0),
-            distance=if (get.distance) matrix(numeric(0), nobs, 0) else NULL
+            index=matrix(integer(0), nobs, k),
+            distance=if (get.distance) matrix(numeric(0), nobs, k) else NULL
         ))
+    }
+
+    if (nrow(reference) <= 1L) {
+        out <- queryKNN(
+            reference,
+            query=query,
+            k=k,
+            BNPARAM=KmknnParam(distance="Euclidean"),
+            get.distance=get.distance,
+            num.threads=num.threads
+        )
+        return(list(index=out$index, distance=out$distance))
     }
 
     idx <- NULL
@@ -315,8 +308,9 @@ FlannKdtreeIndex <- function(data, names, param) {
 
 #' @export
 #' @rdname buildIndex
-setMethod("buildIndex", "FlannKdtreeParam", function(X, BNPARAM, transposed=FALSE, ..., .check.nonfinite=TRUE) {
+setMethod("buildIndex", "FlannKdtreeParam", function(X, BNPARAM, transposed=FALSE, num.threads=1, BPPARAM=NULL, ..., .check.nonfinite=TRUE) {
     .require_rflann()
+    .resolve_num_threads(num.threads, BPPARAM)
 
     X <- .coerce_flann_observation_rows(X, transposed=transposed)
     if (.check.nonfinite && any(!is.finite(as.matrix(X)))) {
@@ -333,8 +327,9 @@ setMethod("findKnnFromIndex", "FlannKdtreeIndex", function(BNINDEX, k, get.index
     .require_rflann()
 
     chosen <- .subset_flann_index(BNINDEX, subset)
-    k <- .cap_flann_k(k, max(nrow(BNINDEX@data) - 1L, 0L))
-    variable <- is(k, "AsIs")
+    validated <- .validate_and_cap_k(k, length(chosen), max(nrow(BNINDEX@data) - 1L, 0L))
+    k <- validated$k
+    variable <- validated$variable
     max.k <- if (length(k)) max(k) else 0L
 
     report.distance <- !isFALSE(get.distance)
@@ -392,8 +387,9 @@ setMethod("queryKnnFromIndex", "FlannKdtreeIndex", function(
     }
 
     query <- .prepare_flann_query(query, BNINDEX@param)
-    k <- .cap_flann_k(k, nrow(BNINDEX@data))
-    variable <- is(k, "AsIs")
+    validated <- .validate_and_cap_k(k, nrow(query), nrow(BNINDEX@data))
+    k <- validated$k
+    variable <- validated$variable
     max.k <- if (length(k)) max(k) else 0L
 
     report.distance <- !isFALSE(get.distance)
@@ -420,13 +416,7 @@ setMethod("queryKnnFromIndex", "FlannKdtreeIndex", function(
 #' @rdname findDistance
 setMethod("findDistanceFromIndex", "FlannKdtreeIndex", function(BNINDEX, k, num.threads=1, subset=NULL, ...) {
     found <- findKnnFromIndex(BNINDEX, k=k, get.index=FALSE, get.distance=TRUE, num.threads=num.threads, subset=subset)
-    if (is(k, "AsIs")) {
-        vapply(found$distance, function(x) if (length(x)) x[length(x)] else NA_real_, 0)
-    } else if (ncol(found$distance)) {
-        found$distance[,ncol(found$distance)]
-    } else {
-        rep(NA_real_, nrow(found$distance))
-    }
+    .last_distance_from_knn(found, k)
 })
 
 #' @export
@@ -454,13 +444,7 @@ setMethod("queryDistanceFromIndex", "FlannKdtreeIndex", function(
         .check.nonfinite=.check.nonfinite
     )
 
-    if (is(k, "AsIs")) {
-        vapply(found$distance, function(x) if (length(x)) x[length(x)] else NA_real_, 0)
-    } else if (ncol(found$distance)) {
-        found$distance[,ncol(found$distance)]
-    } else {
-        rep(NA_real_, nrow(found$distance))
-    }
+    .last_distance_from_knn(found, k)
 })
 
 #' @export

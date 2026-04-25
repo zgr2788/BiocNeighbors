@@ -87,3 +87,28 @@ test_that("FlannKmeansParam works in findMutualNN", {
     expect_identical(length(out$first), length(out$second))
     expect_true(length(out$first) > 0)
 })
+
+test_that("FlannKmeansParam supports the shared threading interface", {
+    skip_if_not_installed("rflann")
+    set.seed(1405)
+
+    Y <- matrix(rnorm(10000), ncol=20)
+    Z <- matrix(rnorm(2000), ncol=20)
+    p <- FlannKmeansParam()
+
+    built.bp <- buildIndex(Y, BNPARAM=p, BPPARAM=BiocParallel::SnowParam(2))
+    built.nt <- buildIndex(Y, BNPARAM=p, num.threads=2)
+    out.bp <- queryKNN(built.bp, Z, k=5, BPPARAM=BiocParallel::SnowParam(2))
+    out.nt <- queryKNN(built.bp, Z, k=5, num.threads=2)
+
+    expect_s4_class(built.bp, "FlannKmeansIndex")
+    expect_s4_class(built.nt, "FlannKmeansIndex")
+    expect_identical(dim(out.bp$index), c(nrow(Z), 5L))
+    expect_identical(dim(out.bp$distance), c(nrow(Z), 5L))
+    expect_identical(dim(out.nt$index), c(nrow(Z), 5L))
+    expect_identical(dim(out.nt$distance), c(nrow(Z), 5L))
+    expect_true(all(out.bp$index >= 1L & out.bp$index <= nrow(Y)))
+    expect_true(all(out.nt$index >= 1L & out.nt$index <= nrow(Y)))
+    expect_true(all(is.finite(out.bp$distance)))
+    expect_true(all(is.finite(out.nt$distance)))
+})

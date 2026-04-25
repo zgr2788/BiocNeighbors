@@ -1,6 +1,6 @@
 #' @export
 #' @rdname buildIndex
-setGeneric("buildIndex", signature="BNPARAM", function(X, BNPARAM, transposed=FALSE, ...) standardGeneric("buildIndex"))
+setGeneric("buildIndex", signature="BNPARAM", function(X, BNPARAM, transposed=FALSE, num.threads=1, BPPARAM=NULL, ...) standardGeneric("buildIndex"))
 
 #' @export
 #' @rdname defineBuilder 

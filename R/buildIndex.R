@@ -6,6 +6,8 @@
 #' @param ... Further arguments to be passed to individual methods.
 #' If a method accepts arguments here, it should prefix these arguments with the algorithm name to avoid conflicts, e.g., \code{vptree.foo.bar}.
 #' @param transposed Logical scalar indicating whether \code{X} is transposed, i.e., rows are variables and columns are data points.
+#' @param num.threads Integer scalar specifying the number of threads to use for index construction, where supported.
+#' @param BPPARAM Soft-deprecated, use \code{num.threads} instead.
 #' @param BNPARAM A \linkS4class{BiocNeighborParam} object specifying the type of index to be constructed.
 #' If \code{NULL} or missing, this defaults to a \linkS4class{KmknnParam} object. 
 #' Alternatively, this may be a list returned by \code{\link{defineBuilder}}.
@@ -40,19 +42,22 @@ NULL
 
 #' @export
 #' @rdname buildIndex
-setMethod("buildIndex", "missing", function(X, BNPARAM, transposed=FALSE, ...) callGeneric(X, BNPARAM=NULL, transposed=transposed, ...))
+setMethod("buildIndex", "missing", function(X, BNPARAM, transposed=FALSE, num.threads=1, BPPARAM=NULL, ...) callGeneric(X, BNPARAM=NULL, transposed=transposed, num.threads=num.threads, BPPARAM=BPPARAM, ...))
 
 #' @export
 #' @rdname buildIndex
-setMethod("buildIndex", "NULL", function(X, BNPARAM, transposed=FALSE, ...) callGeneric(X, BNPARAM=KmknnParam(), transposed=transposed, ...))
+setMethod("buildIndex", "NULL", function(X, BNPARAM, transposed=FALSE, num.threads=1, BPPARAM=NULL, ...) callGeneric(X, BNPARAM=KmknnParam(), transposed=transposed, num.threads=num.threads, BPPARAM=BPPARAM, ...))
 
 #' @export
 #' @rdname buildIndex
-setMethod("buildIndex", "BiocNeighborParam", function(X, BNPARAM, transposed=FALSE, ...) callGeneric(X, BNPARAM=defineBuilder(BNPARAM), transposed=transposed, ...))
+setMethod("buildIndex", "BiocNeighborParam", function(X, BNPARAM, transposed=FALSE, num.threads=1, BPPARAM=NULL, ...) callGeneric(X, BNPARAM=defineBuilder(BNPARAM), transposed=transposed, num.threads=num.threads, BPPARAM=BPPARAM, ...))
 
 #' @export
 #' @rdname buildIndex
-setMethod("buildIndex", "list", function(X, BNPARAM, transposed=FALSE, ..., .check.nonfinite=TRUE) {
+setMethod("buildIndex", "list", function(X, BNPARAM, transposed=FALSE, num.threads=1, BPPARAM=NULL, ..., .check.nonfinite=TRUE) {
+    # Generic C++ builders only expose threading during search, not build.
+    .resolve_num_threads(num.threads, BPPARAM)
+
     X <- .transpose_and_subset(X, transposed, subset=NULL)
     cn <- colnames(X)
     if (!is.matrix(X)) {

@@ -13,7 +13,7 @@ A virtual class for specifying the type of nearest-neighbor search algorithm and
 }
 \details{
 The BiocNeighborParam class is a virtual base class on which other parameter objects are built.
-There are currently 9 concrete subclasses in \pkg{BiocNeighbors}:
+There are currently 10 concrete subclasses in \pkg{BiocNeighbors}:
 \describe{
 \item{\code{\link{KmknnParam}}:}{Exact nearest-neighbor search with the KMKNN algorithm.}
 \item{\code{\link{VptreeParam}}:}{Exact nearest-neighbor search with the tree algorithm.}
@@ -22,6 +22,7 @@ There are currently 9 concrete subclasses in \pkg{BiocNeighbors}:
 \item{\code{\link{HnswParam}}:}{Approximate nearest-neighbor search with the HNSW algorithm.}
 \item{\code{\link{FlannKdtreeParam}}:}{Approximate nearest-neighbor search with FLANN randomized kd-trees.}
 \item{\code{\link{FlannKmeansParam}}:}{Approximate nearest-neighbor search with FLANN hierarchical k-means trees.}
+\item{\code{\link{MlpackLshParam}}:}{Approximate nearest-neighbor search with mlpack locality-sensitive hashing.}
 \item{\code{\link{NndescentParam}}:}{Approximate nearest-neighbor search with nearest-neighbor descent.}
 \item{\code{\link{RpforestParam}}:}{Approximate nearest-neighbor search with a random projection forest.}
 }
@@ -48,6 +49,7 @@ This should be one of \code{"Euclidean"}, \code{"Manhattan"} or \code{"Cosine"}.
 \code{\link{HnswParam}},
 \code{\link{FlannKdtreeParam}},
 \code{\link{FlannKmeansParam}},
+\code{\link{MlpackLshParam}},
 \code{\link{NndescentParam}}
 and \code{\link{RpforestParam}} for constructors.
 

@@ -85,6 +85,7 @@ queryDistance(
   ...,
   subset = NULL,
   transposed = FALSE,
+  BPPARAM = NULL,
   BNPARAM = NULL
 )
 }
@@ -124,6 +125,8 @@ Alternatively, a prebuilt \linkS4class{BiocNeighborIndex} object from \code{\lin
 \item{BNPARAM}{A \linkS4class{BiocNeighborParam} object specifying how the index should be constructed.
 If \code{NULL}, this defaults to a \linkS4class{KmknnParam}.
 Ignored if \code{X} contains a prebuilt index.}
+
+\item{BPPARAM}{Soft-deprecated, use \code{num.threads} instead.}
 }
 \value{
 Numeric vector of length equal to the number of points in \code{query} (or \code{subset}, if provided),

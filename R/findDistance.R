@@ -49,9 +49,10 @@ setMethod("findDistanceFromIndex", "BiocNeighborGenericIndex", function(BNINDEX,
 
 #' @export
 #' @rdname findDistance
-findDistance <- function(X, k, num.threads=1, subset=NULL, ..., BNPARAM=NULL) {
+findDistance <- function(X, k, num.threads=1, subset=NULL, ..., BPPARAM=NULL, BNPARAM=NULL) {
+    num.threads <- .resolve_num_threads(num.threads, BPPARAM)
     if (!is(X, "BiocNeighborIndex")) {
-        X <- buildIndex(X, ..., BNPARAM=BNPARAM)
+        X <- buildIndex(X, ..., BNPARAM=BNPARAM, num.threads=num.threads)
     }
 
     findDistanceFromIndex(

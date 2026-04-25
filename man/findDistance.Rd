@@ -24,7 +24,15 @@ findDistanceFromIndex(BNINDEX, k, num.threads = 1, subset = NULL, ...)
 
 \S4method{findDistanceFromIndex}{BiocNeighborGenericIndex}(BNINDEX, k, num.threads = 1, subset = NULL, ...)
 
-findDistance(X, k, num.threads = 1, subset = NULL, ..., BNPARAM = NULL)
+findDistance(
+  X,
+  k,
+  num.threads = 1,
+  subset = NULL,
+  ...,
+  BPPARAM = NULL,
+  BNPARAM = NULL
+)
 }
 \arguments{
 \item{BNINDEX}{A \linkS4class{BiocNeighborIndex} object, typically created by \code{\link{buildIndex}}.}
@@ -54,6 +62,8 @@ Alternatively, a prebuilt \linkS4class{BiocNeighborIndex} object from \code{\lin
 \item{BNPARAM}{A \linkS4class{BiocNeighborParam} object specifying how the index should be constructed.
 If \code{NULL}, this defaults to a \linkS4class{KmknnParam}.
 Ignored if \code{X} contains a prebuilt index.}
+
+\item{BPPARAM}{Soft-deprecated, use \code{num.threads} instead.}
 }
 \value{
 Numeric vector of length equal to the number of points in \code{X} (or \code{subset}, if provided),

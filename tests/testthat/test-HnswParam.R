@@ -30,3 +30,15 @@ test_that("HnswParam queries behave with cosine distance", {
     ref <- queryKNN(Y1, Z1, k=8, BNPARAM=p)
     expect_equal(out, ref)
 })
+
+test_that("HnswParam accepts the shared threading interface", {
+    Y <- matrix(rnorm(10000), ncol=20)
+    Z <- matrix(rnorm(2000), ncol=20)
+
+    idx <- buildIndex(Y, BNPARAM=HnswParam(), BPPARAM=BiocParallel::SnowParam(2))
+    out <- queryKNN(idx, Z, k=5, BPPARAM=BiocParallel::SnowParam(2))
+
+    expect_s4_class(idx, "HnswIndex")
+    expect_identical(dim(out$index), c(nrow(Z), 5L))
+    expect_identical(dim(out$distance), c(nrow(Z), 5L))
+})

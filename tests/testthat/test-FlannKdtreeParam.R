@@ -87,3 +87,21 @@ test_that("FlannKdtreeParam works in findMutualNN", {
     expect_identical(length(out$first), length(out$second))
     expect_true(length(out$first) > 0)
 })
+
+test_that("FlannKdtreeParam supports the shared threading interface", {
+    skip_if_not_installed("rflann")
+    set.seed(1305)
+
+    Y <- matrix(rnorm(10000), ncol=20)
+    Z <- matrix(rnorm(2000), ncol=20)
+    p <- FlannKdtreeParam()
+
+    built.bp <- buildIndex(Y, BNPARAM=p, BPPARAM=BiocParallel::SnowParam(2))
+    built.nt <- buildIndex(Y, BNPARAM=p, num.threads=2)
+    out.bp <- queryKNN(built.bp, Z, k=5, BPPARAM=BiocParallel::SnowParam(2))
+    out.nt <- queryKNN(built.bp, Z, k=5, num.threads=2)
+
+    expect_s4_class(built.bp, "FlannKdtreeIndex")
+    expect_s4_class(built.nt, "FlannKdtreeIndex")
+    expect_equal(out.bp, out.nt)
+})

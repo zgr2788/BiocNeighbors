@@ -102,11 +102,9 @@ setMethod("queryNeighborsFromIndex", "BiocNeighborGenericIndex", function(
 #' @export
 #' @rdname queryNeighbors
 queryNeighbors <- function(X, query, threshold, get.index=TRUE, get.distance=TRUE, num.threads=1, subset=NULL, transposed=FALSE, ..., BPPARAM=NULL, BNPARAM=NULL) {
-    if (!is.null(BPPARAM)) {
-        num.threads <- BiocParallel::bpnworkers(BPPARAM)
-    }
+    num.threads <- .resolve_num_threads(num.threads, BPPARAM)
     if (!is(X, "BiocNeighborIndex")) {
-        X <- buildIndex(X, transposed=transposed, ..., BNPARAM=BNPARAM)
+        X <- buildIndex(X, transposed=transposed, ..., BNPARAM=BNPARAM, num.threads=num.threads)
     }
 
     queryNeighborsFromIndex(

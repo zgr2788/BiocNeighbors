@@ -113,12 +113,12 @@ RpforestIndex <- function(index, data, names, param) {
 
 .rpforest_algorithm_name <- "BiocNeighbors::Rpforest"
 
-.fallback_rpforest_query <- function(reference, query, k, num.threads=1L) {
+.fallback_rpforest_query <- function(reference, query, k, distance, num.threads=1L) {
     out <- queryKNN(
         reference,
         query=query,
         k=k,
-        BNPARAM=KmknnParam(distance="Euclidean"),
+        BNPARAM=KmknnParam(distance=distance),
         num.threads=num.threads
     )
     list(idx=out$index, dist=out$distance)
@@ -147,7 +147,7 @@ RpforestIndex <- function(index, data, names, param) {
     NULL
 }
 
-.standardize_rpforest_hits <- function(found, reference, query, k, num.threads=1L) {
+.standardize_rpforest_hits <- function(found, reference, query, k, distance, num.threads=1L) {
     nobs <- nrow(query)
     if (!k) {
         return(list(
@@ -160,13 +160,13 @@ RpforestIndex <- function(index, data, names, param) {
     dist <- .coerce_rpforest_matrix(found$dist, nobs, k)
 
     if (is.null(idx) || is.null(dist)) {
-        return(.fallback_rpforest_query(reference, query, k, num.threads=num.threads))
+        return(.fallback_rpforest_query(reference, query, k, distance=distance, num.threads=num.threads))
     }
 
     bad.index <- anyNA(idx) || any(idx < 1L) || any(idx > nrow(reference))
     bad.distance <- anyNA(dist) || any(!is.finite(dist))
     if (bad.index || bad.distance) {
-        return(.fallback_rpforest_query(reference, query, k, num.threads=num.threads))
+        return(.fallback_rpforest_query(reference, query, k, distance=distance, num.threads=num.threads))
     }
 
     list(idx=idx, dist=dist)
@@ -187,7 +187,7 @@ RpforestIndex <- function(index, data, names, param) {
     }
 
     nstored <- ncol(graph$idx)
-    if (is(k, "AsIs")) {
+    if (.is_variable_k(k)) {
         if (!length(k)) {
             return(TRUE)
         }
@@ -236,6 +236,7 @@ RpforestIndex <- function(index, data, names, param) {
         reference=BNINDEX@data,
         query=query,
         k=min(k + 1L, nrow(BNINDEX@data)),
+        distance=bndistance(BNINDEX@param),
         num.threads=num.threads
     )
 
@@ -244,8 +245,9 @@ RpforestIndex <- function(index, data, names, param) {
 
 #' @export
 #' @rdname buildIndex
-setMethod("buildIndex", "RpforestParam", function(X, BNPARAM, transposed=FALSE, ..., .check.nonfinite=TRUE) {
+setMethod("buildIndex", "RpforestParam", function(X, BNPARAM, transposed=FALSE, num.threads=1, BPPARAM=NULL, ..., .check.nonfinite=TRUE) {
     .require_rnndescent()
+    num.threads <- .resolve_num_threads(num.threads, BPPARAM)
 
     X <- .coerce_observation_rows(X, transposed=transposed)
     if (.check.nonfinite && any(!is.finite(as.matrix(X)))) {
@@ -265,7 +267,7 @@ setMethod("buildIndex", "RpforestParam", function(X, BNPARAM, transposed=FALSE, 
             max_tree_depth=BNPARAM@max.tree.depth,
             include_self=FALSE,
             ret_forest=TRUE,
-            n_threads=1L,
+            n_threads=num.threads,
             verbose=FALSE
         )
         forest <- built$forest
@@ -274,14 +276,15 @@ setMethod("buildIndex", "RpforestParam", function(X, BNPARAM, transposed=FALSE, 
             reference=processed$data,
             query=processed$data,
             k=safe.k,
-            num.threads=1L
+            distance=bndistance(BNPARAM),
+            num.threads=num.threads
         )
         idx <- list(
             forest=forest,
             graph=list(idx=graph$idx, dist=graph$dist),
             metric=processed$metric
         )
-    } else {
+    } else if (nrow(processed$data) > 1L) {
         idx <- list(
             forest=rnndescent::rpf_build(
                 processed$data,
@@ -289,7 +292,7 @@ setMethod("buildIndex", "RpforestParam", function(X, BNPARAM, transposed=FALSE, 
                 n_trees=BNPARAM@ntrees,
                 leaf_size=BNPARAM@leaf.size,
                 max_tree_depth=BNPARAM@max.tree.depth,
-                n_threads=1L,
+                n_threads=num.threads,
                 verbose=FALSE
             ),
             graph=list(
@@ -297,6 +300,16 @@ setMethod("buildIndex", "RpforestParam", function(X, BNPARAM, transposed=FALSE, 
                 dist=matrix(numeric(0), nrow(processed$data), 0)
             ),
             metric=processed$metric
+        )
+    } else {
+        idx <- list(
+            forest=NULL,
+            graph=list(
+                idx=matrix(integer(0), nrow(processed$data), 0),
+                dist=matrix(numeric(0), nrow(processed$data), 0)
+            ),
+            metric=processed$metric,
+            empty=TRUE
         )
     }
 
@@ -309,8 +322,9 @@ setMethod("findKnnFromIndex", "RpforestIndex", function(BNINDEX, k, get.index=TR
     .require_rnndescent()
 
     chosen <- .subset_nndescent_index(BNINDEX, subset)
-    k <- .cap_nndescent_k(k, max(nrow(BNINDEX@data) - 1L, 0L))
-    variable <- is(k, "AsIs")
+    validated <- .validate_and_cap_k(k, length(chosen), max(nrow(BNINDEX@data) - 1L, 0L))
+    k <- validated$k
+    variable <- validated$variable
 
     if (variable) {
         max.k <- if (length(k)) max(k) else 0L
@@ -354,13 +368,23 @@ setMethod("queryKnnFromIndex", "RpforestIndex", function(
     }
 
     query <- .prepare_nndescent_query(query, BNINDEX@param)
-    k <- .cap_nndescent_k(k, nrow(BNINDEX@data))
-    variable <- is(k, "AsIs")
+    validated <- .validate_and_cap_k(k, nrow(query), nrow(BNINDEX@data))
+    k <- validated$k
+    variable <- validated$variable
     max.k <- if (length(k)) max(k) else 0L
 
-    if (!max.k) {
+    if (!nrow(query) || !max.k) {
         nr <- nrow(query)
-        found <- list(index=matrix(integer(0), nr, 0), distance=matrix(numeric(0), nr, 0))
+        found <- list(index=matrix(integer(0), nr, max.k), distance=matrix(numeric(0), nr, max.k))
+    } else if (is.null(BNINDEX@index$forest)) {
+        found <- .fallback_rpforest_query(
+            reference=BNINDEX@data,
+            query=query,
+            k=max.k,
+            distance=bndistance(BNINDEX@param),
+            num.threads=num.threads
+        )
+        found <- list(index=found$idx, distance=found$dist)
     } else {
         found <- rnndescent::rpf_knn_query(
             query=query,
@@ -375,6 +399,7 @@ setMethod("queryKnnFromIndex", "RpforestIndex", function(
             reference=BNINDEX@data,
             query=query,
             k=max.k,
+            distance=bndistance(BNINDEX@param),
             num.threads=num.threads
         )
         found <- list(index=found$idx, distance=found$dist)
@@ -393,13 +418,7 @@ setMethod("queryKnnFromIndex", "RpforestIndex", function(
 #' @rdname findDistance
 setMethod("findDistanceFromIndex", "RpforestIndex", function(BNINDEX, k, num.threads=1, subset=NULL, ...) {
     found <- findKnnFromIndex(BNINDEX, k=k, get.index=FALSE, get.distance=TRUE, num.threads=num.threads, subset=subset)
-    if (is(k, "AsIs")) {
-        vapply(found$distance, function(x) if (length(x)) x[length(x)] else NA_real_, 0)
-    } else if (ncol(found$distance)) {
-        found$distance[,ncol(found$distance)]
-    } else {
-        rep(NA_real_, nrow(found$distance))
-    }
+    .last_distance_from_knn(found, k)
 })
 
 #' @export
@@ -427,13 +446,7 @@ setMethod("queryDistanceFromIndex", "RpforestIndex", function(
         .check.nonfinite=.check.nonfinite
     )
 
-    if (is(k, "AsIs")) {
-        vapply(found$distance, function(x) if (length(x)) x[length(x)] else NA_real_, 0)
-    } else if (ncol(found$distance)) {
-        found$distance[,ncol(found$distance)]
-    } else {
-        rep(NA_real_, nrow(found$distance))
-    }
+    .last_distance_from_knn(found, k)
 })
 
 #' @export

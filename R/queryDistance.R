@@ -65,9 +65,10 @@ setMethod("queryDistanceFromIndex", "BiocNeighborGenericIndex", function(
 
 #' @export
 #' @rdname queryDistance
-queryDistance <- function(X, query, k, num.threads=1, ..., subset=NULL, transposed=FALSE, BNPARAM=NULL) {
+queryDistance <- function(X, query, k, num.threads=1, ..., subset=NULL, transposed=FALSE, BPPARAM=NULL, BNPARAM=NULL) {
+    num.threads <- .resolve_num_threads(num.threads, BPPARAM)
     if (!is(X, "BiocNeighborIndex")) {
-        X <- buildIndex(X, transposed=transposed, ..., BNPARAM=BNPARAM)
+        X <- buildIndex(X, transposed=transposed, ..., BNPARAM=BNPARAM, num.threads=num.threads)
     }
 
     queryDistanceFromIndex(
